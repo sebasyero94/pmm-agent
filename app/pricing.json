@@ -1,0 +1,7 @@
+{
+  "plans": {
+    "free": { "price_usd_per_month": 0, "monthly_events": 1000000, "seats": "unlimited" },
+    "growth": { "price_usd_per_month": 28, "monthly_events": 1000000, "seats": "unlimited" },
+    "enterprise": { "price_usd_per_month": "custom", "monthly_events": "custom", "seats": "unlimited" }
+  }
+}

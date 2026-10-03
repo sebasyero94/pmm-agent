@@ -1,0 +1,60 @@
+name: PMM Agent
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+  id-token: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Write Notion MCP config
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: |
+          cat > notion-mcp.json <<EOF
+          {"mcpServers":{"notion":{"command":"npx","args":["-y","@notionhq/notion-mcp-server"],
+          "env":{"OPENAPI_MCP_HEADERS":"{\"Authorization\":\"Bearer ${NOTION_TOKEN}\",\"Notion-Version\":\"2022-06-28\"}"}}}}
+          EOF
+
+      - name: Build prompt
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          NOTION_DATABASE_ID: ${{ vars.NOTION_DATABASE_ID }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            cat agent/prompt.md
+            echo
+            echo "## This PR"
+            echo "- Number: #$PR_NUMBER"
+            echo "- URL: $PR_URL"
+            echo "- Title: $PR_TITLE"
+            echo "- Notion database ID: $NOTION_DATABASE_ID"
+            echo
+            echo "### Diff"
+            echo '```diff'
+            git diff "$BASE_SHA" "$HEAD_SHA"
+            echo '```'
+          } > full-prompt.md
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: "Follow the instructions in full-prompt.md exactly."
+          claude_args: |
+            --max-turns 15
+            --mcp-config notion-mcp.json
+            --allowedTools "Read,WebFetch,mcp__notion__*"
